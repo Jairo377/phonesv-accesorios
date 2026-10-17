@@ -6,13 +6,17 @@
 <title>Ticket de venta – Phone SV (accesorios)</title>
 <style>
   *{box-sizing:border-box}
-  body{margin:0;background:#dcdcdc;font-family:-apple-system,Helvetica,Arial,sans-serif}
-  .bar{position:sticky;top:0;z-index:5;display:flex;gap:8px;justify-content:center;padding:10px;background:#222}
-  .bar button{font-size:16px;padding:10px 16px;border:0;border-radius:8px;background:#fff;color:#000;font-weight:600}
-  .bar button.main{background:#16a34a;color:#fff}
-  /* 80 mm = 576 px a 203 dpi (área imprimible ~72 mm) */
-  #ticket{width:576px;margin:14px auto;background:#fff;color:#000;padding:22px 20px 30px;
+  body{margin:0;padding:12px 0 100px;background:#dcdcdc;font-family:-apple-system,Helvetica,Arial,sans-serif}
+  /* La vista previa se reduce al ancho del teléfono; el ticket real sigue midiendo 576 px */
+  #wrap{margin:0 auto;overflow:hidden}
+  #ticket{width:576px;transform-origin:top left;background:#fff;color:#000;padding:22px 20px 30px;
           font-family:"Courier New",Courier,monospace;font-size:23px;line-height:1.28}
+  .bar{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;
+       padding:14px 12px calc(14px + env(safe-area-inset-bottom));
+       background:linear-gradient(to top,#dcdcdc 65%,rgba(220,220,220,0))}
+  .bar button{font-size:17px;padding:12px 30px;border:1px solid #bdbdc2;border-radius:999px;
+              background:#f4f4f6;color:#222;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+  .bar button:active{background:#e4e4e8}
   .c{text-align:center}.b{font-weight:700}
   .neg{font-size:38px;font-weight:700;letter-spacing:1px}
   .sep{border-top:2px dashed #000;margin:12px 0}
@@ -27,18 +31,16 @@
   .tag{display:inline-block;border:2px solid #000;padding:0 10px;font-weight:700;margin-bottom:6px}
   @media print{
     @page{size:80mm auto;margin:0}
-    body{background:#fff}.bar{display:none}
-    #ticket{margin:0;width:72mm;padding:3mm;font-size:3.1mm}
+    body{background:#fff;padding:0}.bar{display:none}
+    #wrap{width:auto!important;height:auto!important;overflow:visible}
+    #ticket{transform:none!important;width:72mm;padding:3mm;font-size:3.1mm}
     .neg{font-size:5mm}.big{font-size:4.4mm}.small{font-size:2.5mm}
   }
 </style>
 </head>
 <body>
-<div class="bar">
-  <button class="main" id="btnPng">Imprimir (Jadens)</button>
-  <button id="btnPrint">Imprimir (navegador)</button>
-</div>
-<div id="ticket"></div>
+<div id="wrap"><div id="ticket"></div></div>
+<div class="bar"><button id="btnPng">🖨️ Imprimir</button></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
@@ -78,6 +80,19 @@ const num = s => {
 };
 const money = n => MONEDA + n.toFixed(2);
 const line = (a, b) => b ? `<div class="row"><span>${esc(a)}</span><span>${esc(b)}</span></div>` : '';
+
+/* Fecha de venta: AppSheet la manda como mes/día/año (o aaaa-mm-dd); se muestra día/mes/año */
+function fechaVenta(v){
+  const t = String(v || '').trim(); if (!t) return '';
+  const p2 = n => String(n).padStart(2, '0');
+  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${p2(m[3])}/${p2(m[2])}/${m[1]}`;
+  m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!m) return t;
+  let a = +m[1], b = +m[2];
+  if (a > 12) return `${p2(a)}/${p2(b)}/${m[3]}`;      // ya viene día/mes/año
+  return `${p2(b)}/${p2(a)}/${m[3]}`;                  // mes/día/año -> día/mes/año
+}
 
 /* Fecha y hora de emisión del ticket, 24 h */
 function fechaTxt(){
@@ -123,7 +138,7 @@ function render(){
   h += `<div class="c"><span class="tag">TICKET DE VENTA</span><div class="b">ACCESORIOS</div></div>`;
   h += `<div class="sep"></div>`;
   h += line('Ticket:', D.IDPedido);
-  h += line('Fecha de venta:', D.Fecha_Venta);
+  h += line('Fecha de venta:', fechaVenta(D.Fecha_Venta));
   h += line('Cliente:', D.Nombre_Cliente);
   h += line('Tel:', D.Telefono);
   h += line('Asistente:', D.Nombre_Vendedor);
@@ -148,20 +163,37 @@ function render(){
 }
 render();
 
-/* Compartir como PNG a la app de la impresora (solo el archivo, sin title) */
+/* Ajuste de la vista previa al ancho de la pantalla */
+function fit(){
+  const t = document.getElementById('ticket'), w = document.getElementById('wrap');
+  const k = Math.min(1, (window.innerWidth - 24) / 576);
+  t.style.transform = `scale(${k})`;
+  w.style.width  = (576 * k) + 'px';
+  w.style.height = (t.offsetHeight * k) + 'px';
+}
+fit();
+window.addEventListener('resize', fit);
+window.addEventListener('load', fit);
+
+/* Imprimir: genera el PNG a tamaño real (576 px) y lo comparte a la app de la impresora (solo el archivo, sin title) */
 document.getElementById('btnPng').addEventListener('click', async () => {
-  const el = document.getElementById('ticket');
-  const canvas = await html2canvas(el, {scale: 2, backgroundColor: '#ffffff'});
-  canvas.toBlob(async blob => {
+  const holder = document.createElement('div');
+  holder.style.cssText = 'position:absolute;left:-10000px;top:0;width:576px';
+  const clone = document.getElementById('ticket').cloneNode(true);
+  clone.style.transform = 'none';
+  holder.appendChild(clone);
+  document.body.appendChild(holder);
+  try {
+    const canvas = await html2canvas(clone, {scale: 2, backgroundColor: '#ffffff', windowWidth: 576, scrollX: 0, scrollY: 0});
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
     const file = new File([blob], `ticket-accesorios-${D.IDPedido || 'venta'}.png`, {type: 'image/png'});
     if (navigator.canShare && navigator.canShare({files: [file]})) {
       try { await navigator.share({files: [file]}); } catch (e) {}
     } else {
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
     }
-  }, 'image/png');
+  } finally { holder.remove(); }
 });
-document.getElementById('btnPrint').addEventListener('click', () => window.print());
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
