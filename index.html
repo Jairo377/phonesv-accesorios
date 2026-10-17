@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ticket de venta – Phone SV (accesorios)</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#dcdcdc;font-family:-apple-system,Helvetica,Arial,sans-serif}
+  .bar{position:sticky;top:0;z-index:5;display:flex;gap:8px;justify-content:center;padding:10px;background:#222}
+  .bar button{font-size:16px;padding:10px 16px;border:0;border-radius:8px;background:#fff;color:#000;font-weight:600}
+  .bar button.main{background:#16a34a;color:#fff}
+  /* 80 mm = 576 px a 203 dpi (área imprimible ~72 mm) */
+  #ticket{width:576px;margin:14px auto;background:#fff;color:#000;padding:22px 20px 30px;
+          font-family:"Courier New",Courier,monospace;font-size:23px;line-height:1.28}
+  .c{text-align:center}.b{font-weight:700}
+  .neg{font-size:38px;font-weight:700;letter-spacing:1px}
+  .sep{border-top:2px dashed #000;margin:12px 0}
+  .row{display:flex;justify-content:space-between;gap:10px}
+  .row span:first-child{flex:0 0 auto}
+  .row span:last-child{text-align:right;word-break:break-word}
+  .item{margin-bottom:8px}
+  /* el nombre se limita al ~70% del ancho: la columna derecha queda libre para los importes */
+  .item .n{font-weight:700;max-width:70%;overflow-wrap:anywhere}
+  .big{font-size:34px;font-weight:700}
+  .small{font-size:19px}
+  .tag{display:inline-block;border:2px solid #000;padding:0 10px;font-weight:700;margin-bottom:6px}
+  @media print{
+    @page{size:80mm auto;margin:0}
+    body{background:#fff}.bar{display:none}
+    #ticket{margin:0;width:72mm;padding:3mm;font-size:3.1mm}
+    .neg{font-size:5mm}.big{font-size:4.4mm}.small{font-size:2.5mm}
+  }
+</style>
+</head>
+<body>
+<div class="bar">
+  <button class="main" id="btnPng">Imprimir (Jadens)</button>
+  <button id="btnPrint">Imprimir (navegador)</button>
+</div>
+<div id="ticket"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+/* ============ CONFIGURACIÓN ============ */
+const NEGOCIO = {
+  nombre:   'PHONE SV',
+  direccion:'Plaza Comercial Pasares, San Juan Opico, La Libertad',
+  tel:      'WhatsApp: 6064-3493'
+};
+const MONEDA = '$';
+const PIE = 'Gracias por tu compra';
+/* ======================================= */
+
+/* Parámetros de URL = columnas de AppSheet:
+   IDPedido, Telefono, Nombre, Nombre_Vendedor, Total_Items, Costo_Envio, Total, Tipo_Pago
+   Items = una línea por fila de Ventas, separadas por |, con campos separados por ~ :
+   LVL1~LVL2~LVL3~Cantidad_Vendida~Precio_Venta~Total_Fila */
+const q = new URLSearchParams(location.search);
+const hayDatos = [...q.keys()].length > 0;
+const get = k => (q.get(k) || '').trim();
+
+const DEMO = {
+  IDPedido:'0001', Telefono:'7000-0000', Nombre:'Cliente de prueba', Nombre_Vendedor:'Jairo',
+  Items:'Case~iPhone 17 Pro Max~Green TechWoven MagSafe with Apple Animation OEM~1~25~25|Vidrio Templado~iPhone 17 Pro Max~Film Privacy~2~5~10',
+  Total_Items:'35', Costo_Envio:'3.50', Total:'38.50', Tipo_Pago:'Efectivo'
+};
+const D = hayDatos ? Object.fromEntries([...q.keys()].map(k => [k, get(k)])) : DEMO;
+
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num = s => {
+  let t = String(s ?? '').replace(/[^0-9.,-]/g, '');
+  t = t.includes('.') ? t.replace(/,/g, '') : t.replace(',', '.');   // "1,200.50" y "12,5"
+  const n = parseFloat(t); return isNaN(n) ? 0 : n;
+};
+const money = n => MONEDA + n.toFixed(2);
+const line = (a, b) => b ? `<div class="row"><span>${esc(a)}</span><span>${esc(b)}</span></div>` : '';
+
+/* Fecha y hora de impresión del ticket, 24 h */
+function fechaTxt(){
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function render(){
+  const items = (D.Items || '').split('|').filter(t => t.trim()).map(t => {
+    const f = t.split('~').map(x => x.trim());
+    const nombre = f.slice(0, 3).filter(x => x && x !== '-').join(' ');   // LVL1 LVL2 LVL3
+    const cant = num(f[3]) || 1, pu = num(f[4]);
+    const tot = f[5] !== undefined && f[5] !== '' ? num(f[5]) : cant * pu;
+    return {nombre, cant, pu, tot};
+  });
+  const subtotal = D.Total_Items !== undefined && D.Total_Items !== '' ? num(D.Total_Items) : items.reduce((a, i) => a + i.tot, 0);
+  const envio = num(D.Costo_Envio);
+  const total = D.Total !== undefined && D.Total !== '' ? num(D.Total) : subtotal + envio;
+
+  let h = '';
+  h += `<div class="c"><div class="neg">${esc(NEGOCIO.nombre)}</div>`;
+  h += `<div class="small">${esc(NEGOCIO.direccion)}</div><div class="small">${esc(NEGOCIO.tel)}</div></div>`;
+  h += `<div class="sep"></div>`;
+
+  h += `<div class="c"><span class="tag">TICKET DE VENTA</span><div class="b">ACCESORIOS</div></div>`;
+  h += `<div class="sep"></div>`;
+  h += line('Ticket:', D.IDPedido);
+  h += line('Fecha:', fechaTxt());
+  h += line('Cliente:', D.Nombre);
+  h += line('Tel:', D.Telefono);
+  h += line('Asistente:', D.Nombre_Vendedor);
+
+  h += `<div class="sep"></div><div class="row b"><span>DESCRIPCIÓN</span><span>IMPORTE</span></div><div class="sep" style="margin:6px 0"></div>`;
+  items.forEach(i => {
+    h += `<div class="item"><div class="n">${esc(i.nombre)}</div>`;
+    h += `<div class="row"><span>${i.cant} x ${money(i.pu)}</span><span>${money(i.tot)}</span></div></div>`;
+  });
+
+  h += `<div class="sep"></div>`;
+  h += line('Subtotal:', money(subtotal));
+  h += line('Envío:', money(envio));
+  h += `<div class="row big"><span>TOTAL:</span><span>${money(total)}</span></div>`;
+
+  h += `<div class="sep"></div>`;
+  h += line('Pago:', D.Tipo_Pago);
+
+  h += `<div class="sep"></div><div class="c b">${esc(PIE)}</div>`;
+  document.getElementById('ticket').innerHTML = h;
+}
+render();
+
+/* Compartir como PNG a la app de la impresora (solo el archivo, sin title) */
+document.getElementById('btnPng').addEventListener('click', async () => {
+  const el = document.getElementById('ticket');
+  const canvas = await html2canvas(el, {scale: 2, backgroundColor: '#ffffff'});
+  canvas.toBlob(async blob => {
+    const file = new File([blob], `ticket-accesorios-${D.IDPedido || 'venta'}.png`, {type: 'image/png'});
+    if (navigator.canShare && navigator.canShare({files: [file]})) {
+      try { await navigator.share({files: [file]}); } catch (e) {}
+    } else {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+    }
+  }, 'image/png');
+});
+document.getElementById('btnPrint').addEventListener('click', () => window.print());
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
