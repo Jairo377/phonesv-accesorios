@@ -53,7 +53,7 @@ const PIE = 'Gracias por tu compra';
 /* ======================================= */
 
 /* Parámetros de URL = columnas de AppSheet:
-   IDPedido, Telefono, Nombre_Cliente, Nombre_Vendedor, Total_Items, Costo_Envio, Total, Tipo_Pago
+   IDPedido, Telefono, Nombre_Cliente, Nombre_Vendedor, Fecha_Venta, Total_Items, Costo_Envio, Total, Tipo_Pago
    Ítems (tabla Ventas), una lista por columna separada por " , ":
    LVL1, LVL2, LVL3, Cantidad_Vendida, Precio_Venta, Total_Fila
    (alterno: Items = LVL1~LVL2~LVL3~Cant~Precio~TotalFila separados por |) */
@@ -62,7 +62,7 @@ const hayDatos = [...q.keys()].length > 0;
 const get = k => (q.get(k) || '').trim();
 
 const DEMO = {
-  IDPedido:'0001', Telefono:'7000-0000', Nombre_Cliente:'Cliente de prueba', Nombre_Vendedor:'Jairo',
+  IDPedido:'0001', Telefono:'7000-0000', Nombre_Cliente:'Cliente de prueba', Nombre_Vendedor:'Jairo', Fecha_Venta:'17/10/2026',
   LVL1:'Case , Vidrio Templado', LVL2:'iPhone 17 Pro Max , iPhone 17 Pro Max',
   LVL3:'Green TechWoven MagSafe with Apple Animation OEM , Film Privacy',
   Cantidad_Vendida:'1 , 2', Precio_Venta:'25 , 5', Total_Fila:'25 , 10',
@@ -79,7 +79,7 @@ const num = s => {
 const money = n => MONEDA + n.toFixed(2);
 const line = (a, b) => b ? `<div class="row"><span>${esc(a)}</span><span>${esc(b)}</span></div>` : '';
 
-/* Fecha y hora de impresión del ticket, 24 h */
+/* Fecha y hora de emisión del ticket, 24 h */
 function fechaTxt(){
   const d = new Date(), p = n => String(n).padStart(2, '0');
   return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
@@ -123,7 +123,7 @@ function render(){
   h += `<div class="c"><span class="tag">TICKET DE VENTA</span><div class="b">ACCESORIOS</div></div>`;
   h += `<div class="sep"></div>`;
   h += line('Ticket:', D.IDPedido);
-  h += line('Fecha:', fechaTxt());
+  h += line('Fecha de venta:', D.Fecha_Venta);
   h += line('Cliente:', D.Nombre_Cliente);
   h += line('Tel:', D.Telefono);
   h += line('Asistente:', D.Nombre_Vendedor);
@@ -143,6 +143,7 @@ function render(){
   h += line('Pago:', D.Tipo_Pago);
 
   h += `<div class="sep"></div><div class="c b">${esc(PIE)}</div>`;
+  h += `<div class="c small" style="margin-top:6px">Emitido: ${fechaTxt()}</div>`;
   document.getElementById('ticket').innerHTML = h;
 }
 render();
